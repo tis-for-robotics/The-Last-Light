@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>The Last Light</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* --- CORE STYLES --- */
+      body {
+        margin: 0; padding: 0; background-color: #050505; color: #d1d1d1;
+        font-family: "Courier New", Courier, monospace; overflow: hidden;
+        touch-action: none; user-select: none; cursor: none;
+      }
+      #game-container { position: relative; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
+      canvas { display: block; }
+
+      /* --- VISUAL FX --- */
+      /* Z-Index adjusted to not block UI */
+      .vignette { position: fixed; inset: 0; pointer-events: none; z-index: 5; background: radial-gradient(circle, rgba(0,0,0,0) 50%, rgba(0,0,0,0.8) 100%); }
+      
+      .stars-container { position: absolute; inset: 0; overflow: hidden; z-index: 0; pointer-events: none; }
+      .star-layer { position: absolute; top: 0; left: 0; right: 0; bottom: 0; animation: star-move linear infinite; }
+      .star-layer.s1 { width: 1px; height: 1px; background: transparent; box-shadow: 10vw 10vh #fff, 20vw 80vh #fff, 80vw 10vh #fff, 70vw 50vh #fff, 40vw 30vh #fff, 90vw 90vh #fff; animation-duration: 50s; opacity: 0.8; }
+      .star-layer.s2 { width: 2px; height: 2px; background: transparent; box-shadow: 15vw 15vh #888, 25vw 85vh #888, 85vw 15vh #888, 75vw 55vh #888; animation-duration: 100s; opacity: 0.5; }
+      @keyframes star-move { from { transform: translateY(0); } to { transform: translateY(-100vh); } }
+      
+      .grid-floor {
+        position: absolute; bottom: 0; left: -50%; width: 200%; height: 50vh;
+        background: linear-gradient(transparent 0%, rgba(0, 255, 255, 0.1) 100%), linear-gradient(90deg, rgba(0, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(0deg, rgba(0, 255, 255, 0.05) 1px, transparent 1px);
+        background-size: 100% 100%, 40px 40px, 40px 40px; transform: perspective(500px) rotateX(60deg); animation: grid-scroll 5s linear infinite; z-index: 0; pointer-events: none;
+      }
+      @keyframes grid-scroll { 0% { background-position: 0 0, 0 0, 0 0; } 100% { background-position: 0 0, 0 40px, 0 40px; } }
+      
+      .hologram { color: #fff; text-shadow: 0 0 10px rgba(0, 255, 255, 0.5), 0 0 20px rgba(0, 255, 255, 0.3); animation: pulse-glow 3s infinite alternate; }
+      @keyframes pulse-glow { 0% { opacity: 0.8; text-shadow: 0 0 10px rgba(0, 255, 255, 0.5); } 100% { opacity: 1; text-shadow: 0 0 20px rgba(0, 255, 255, 0.8), 0 0 40px rgba(0, 255, 255, 0.4); } }
+      
+      .typewriter { overflow: hidden; border-right: 2px solid rgba(0, 255, 255, 0.7); white-space: nowrap; margin: 0 auto; animation: typing 3s steps(30, end), blink-caret 0.75s step-end infinite; display: inline-block; }
+      @keyframes typing { from { width: 0; } to { width: 100%; } }
+      @keyframes blink-caret { from, to { border-color: transparent; } 50% { border-color: rgba(0, 255, 255, 0.7); } }
+      
+      .tech-border { border: 1px solid rgba(0, 255, 255, 0.2); background: rgba(0, 10, 20, 0.6); padding: 40px; position: relative; backdrop-filter: blur(2px); pointer-events: auto; }
+      .tech-border::before, .tech-border::after { content: ''; position: absolute; width: 10px; height: 10px; border: 2px solid rgba(0, 255, 255, 0.6); transition: all 0.3s; }
+      .tech-border::before { top: -2px; left: -2px; border-right: none; border-bottom: none; }
+      .tech-border::after { bottom: -2px; right: -2px; border-left: none; border-top: none; }
+
+      /* --- CUSTOM CURSOR --- */
+      #custom-cursor { 
+        width: 24px; height: 24px; 
+        border: 2px solid rgba(255, 255, 255, 0.9); 
+        border-radius: 50%; position: fixed; 
+        pointer-events: none; z-index: 10000; /* High Z-Index to stay on top */
+        opacity: 0; transform: translate(-50%, -50%); 
+        transition: opacity 0.2s, width 0.2s, height 0.2s; 
+        box-shadow: 0 0 15px rgba(255, 255, 255, 0.5); 
+        background: rgba(255, 255, 255, 0.05); 
+      }
+      #custom-cursor::after { content: ''; position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; background: white; border-radius: 50%; transform: translate(-50%, -50%); }
+
+      /* --- UI ELEMENTS --- */
+      .ui-overlay { position: absolute; top: 20px; left: 20px; pointer-events: none; z-index: 20; }
+      .status-text { font-size: 1.2rem; margin-bottom: 0.5rem; opacity: 0.8; text-shadow: 0 0 5px black; }
+      
+      .screen-overlay { 
+        position: absolute; inset: 0; background: rgba(0, 0, 0, 0.95); 
+        display: flex; flex-direction: column; justify-content: center; align-items: center; 
+        text-align: center; z-index: 100; pointer-events: auto; overflow: hidden; 
+      }
+
+      .btn { 
+        margin: 0.5rem; padding: 0.8rem 2.5rem; 
+        border: 1px solid rgba(0, 255, 255, 0.2); 
+        background: rgba(0, 0, 0, 0.5); 
+        color: #888; font-family: inherit; font-size: 1rem; 
+        cursor: none; transition: all 0.2s; 
+        text-transform: uppercase; letter-spacing: 2px; width: 320px; 
+        position: relative; z-index: 10; pointer-events: auto;
+      }
+      .btn:hover { background: rgba(0, 255, 255, 0.1); color: #fff; border-color: rgba(0, 255, 255, 0.6); box-shadow: 0 0 15px rgba(0, 255, 255, 0.1); }
+      .btn:disabled { opacity: 0.3; border-color: #333; color: #444; }
+      .btn-danger:hover { background: rgba(255, 0, 0, 0.1); color: #ff9999; border-color: rgba(255, 0, 0, 0.6); box-shadow: 0 0 15px rgba(255, 0, 0, 0.1); }
+
+      /* Mobile Controls */
+      .mobile-controls { display: none; position: absolute; z-index: 50; pointer-events: auto; }
+      @media (max-width: 768px) { .mobile-controls { display: block; } .controls-hint { display: none; } #custom-cursor { opacity: 0 !important; } }
+      .d-pad { bottom: 20px; left: 20px; width: 150px; height: 150px; position: absolute; }
+      .d-btn { position: absolute; width: 50px; height: 50px; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; display: flex; justify-content: center; align-items: center; font-size: 1.5rem; color: rgba(255, 255, 255, 0.5); touch-action: manipulation; }
+      .d-btn:active { background: rgba(255, 255, 255, 0.3); }
+      .d-up { top: 0; left: 50px; } .d-down { bottom: 0; left: 50px; } .d-left { top: 50px; left: 0; } .d-right { top: 50px; right: 0; }
+      .action-btn { bottom: 40px; right: 30px; width: 80px; height: 80px; background: rgba(255, 0, 0, 0.1); border: 2px solid rgba(255, 50, 50, 0.3); border-radius: 50%; position: absolute; display: flex; justify-content: center; align-items: center; font-size: 1rem; color: rgba(255, 255, 255, 0.5); touch-action: manipulation; }
+      .action-btn:active { background: rgba(255, 0, 0, 0.3); }
+
+      /* Settings UI */
+      .setting-group { margin-bottom: 20px; width: 100%; border-top: 1px solid #333; padding-top: 10px; }
+      .setting-header { font-size: 0.9rem; color: #444; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 2px; width: 100%; text-align: left; }
+      .setting-row { width: 320px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid #222; }
+      .setting-label { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+      .bind-btn { background: #111; border: 1px solid #444; color: #fff; padding: 2px 10px; font-family: inherit; font-size: 0.8rem; cursor: none; text-transform: uppercase; width: 80px; text-align: center; pointer-events: auto; }
+      .bind-btn:hover { border-color: #fff; background: #222; }
+      .bind-btn.active { background: #00ffff; color: #000; border-color: #00ffff; }
+      
+      select, input[type="range"] { background: #111; color: #fff; border: 1px solid #444; font-family: inherit; font-size: 0.8rem; outline: none; cursor: none; pointer-events: auto; }
+
+      .shop-grid { display: grid; grid-template-columns: 1fr; gap: 15px; margin-bottom: 20px; }
+      .shop-item { border: 1px solid #333; padding: 15px; background: #0a0a0a; width: 320px; display: flex; justify-content: space-between; align-items: center; }
+      .leaderboard-table { width: 450px; margin-bottom: 20px; border-collapse: collapse; text-align: left; }
+      .leaderboard-table th { border-bottom: 1px solid #444; padding: 10px; color: #888; font-size: 0.8rem; text-transform: uppercase; }
+      .leaderboard-table td { border-bottom: 1px solid #222; padding: 10px; color: #ccc; font-size: 0.9rem; }
+      .page-btn { background: #111; border: 1px solid #444; color: #888; padding: 8px 12px; font-family: inherit; font-size: 1rem; cursor: none; transition: all 0.2s; min-width: 40px; pointer-events: auto; }
+      .page-btn:hover { background: rgba(0, 255, 255, 0.1); color: #fff; border-color: rgba(0, 255, 255, 0.6); }
+      .page-btn:disabled { opacity: 0.3; border-color: #333; color: #444; cursor: none; }
+      .page-info { color: #888; font-size: 0.9rem; min-width: 120px; text-align: center; }
+      #audio-toggle { position: absolute; top: 20px; right: 20px; cursor: none; z-index: 200; opacity: 0.5; transition: opacity 0.3s; pointer-events: auto; }
+      .controls-hint { position: absolute; bottom: 20px; right: 20px; text-align: right; font-size: 0.7rem; color: #444; pointer-events: none; z-index: 50; }
+      .level-notif { position: absolute; top: 15%; width: 100%; text-align: center; color: white; font-size: 2rem; letter-spacing: 8px; opacity: 0; transition: opacity 1s; pointer-events: none; text-shadow: 0 0 10px white; }
+      input#player-name { background: transparent; border: none; border-bottom: 1px solid #444; color: white; text-align: center; padding: 10px; font-family: inherit; font-size: 1.2rem; outline: none; margin-bottom: 15px; width: 320px; cursor: none; pointer-events: auto; }
+      
+      /* --- CUSTOM SCROLLBAR --- */
+      .custom-scroll { scrollbar-width: thin; scrollbar-color: rgba(0, 255, 255, 0.3) rgba(0, 0, 0, 0.2); }
+      .custom-scroll::-webkit-scrollbar { width: 8px; }
+      .custom-scroll::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); border-left: 1px solid rgba(0, 255, 255, 0.1); }
+      .custom-scroll::-webkit-scrollbar-thumb { background: rgba(0, 255, 255, 0.3); border-radius: 4px; border: 1px solid rgba(0, 255, 255, 0.5); }
+      .custom-scroll::-webkit-scrollbar-thumb:hover { background: rgba(0, 255, 255, 0.5); box-shadow: 0 0 6px rgba(0, 255, 255, 0.3); }
+      
+      @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.05); opacity: 0.8; } }
+      
+      #warp-effect { background: radial-gradient(circle at center, rgba(0, 50, 100, 0.3) 0%, rgba(0, 0, 0, 0.8) 50%, #000 100%); overflow: hidden; }
+      .warp-star { position: absolute; background: white; border-radius: 50%; box-shadow: 0 0 4px white; opacity: 0; }
+      @keyframes warpZoom { 0% { transform: translate(-50%, -50%) scale(0.1); opacity: 0; } 10% { opacity: 1; } 90% { opacity: 0.8; } 100% { transform: translate(-50%, -50%) scale(50); opacity: 0; } }
+      @keyframes warpStreak { 0% { width: 2px; height: 2px; opacity: 0; left: 50%; top: 50%; } 20% { opacity: 1; } 100% { opacity: 0; } }
+      @keyframes tunnel { 0% { transform: scale(0.5) rotate(0deg); opacity: 0; } 50% { opacity: 0.3; } 100% { transform: scale(3) rotate(180deg); opacity: 0; } }
+    </style>
+  </head>
+  <body onclick="initAudio()">
+    <div class="vignette"></div>
+    <div id="custom-cursor"></div>
+
+    <div id="game-container">
+      <div class="ui-overlay">
+        <div class="status-text">Health: <span id="health-power">100</span>%</div>
+        <div class="status-text">Memories: <span id="score">0</span></div>
+        <div class="status-text">Rescued: <span id="kill-count">0</span></div>
+        <div class="status-text">Level: <span id="level-display">1</span></div>
+        <div class="status-text text-yellow-100/80">Shards: <span id="currency-display">0</span></div>
+      </div>
+
+      <div class="controls-hint" id="kb-hint"></div>
+
+      <div class="mobile-controls d-pad">
+        <div class="d-btn d-up" ontouchstart="mobileKey('up', true)" ontouchend="mobileKey('up', false)">▲</div>
+        <div class="d-btn d-down" ontouchstart="mobileKey('down', true)" ontouchend="mobileKey('down', false)">▼</div>
+        <div class="d-btn d-left" ontouchstart="mobileKey('left', true)" ontouchend="mobileKey('left', false)">◀</div>
+        <div class="d-btn d-right" ontouchstart="mobileKey('right', true)" ontouchend="mobileKey('right', false)">▶</div>
+      </div>
+      <div class="mobile-controls action-btn" ontouchstart="mobileBlast()">BLAST</div>
+
+      <div id="level-popup" class="level-notif">DEPTH INCREASED</div>
+
+      <div id="audio-toggle" onclick="toggleAudio()">
+        <svg id="audio-icon-on" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+        </svg>
+        <svg id="audio-icon-off" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <line x1="23" y1="9" x2="17" y2="15"></line>
+          <line x1="17" y1="9" x2="23" y2="15"></line>
+        </svg>
+      </div>
+
+      <canvas id="gameCanvas"></canvas>
+
+      <audio id="bg-music" loop>
+        <source src="https://cdn.pixabay.com/audio/2025/11/17/audio_1ea608463b.mp3" type="audio/mpeg" />
+      </audio>
+
+      <div id="intro-screen" class="screen-overlay" style="display: flex;">
+        <div class="stars-container"><div class="star-layer s1"></div><div class="star-layer s2"></div></div>
+        <div id="warp-effect" style="position: absolute; inset: 0; opacity: 0; pointer-events: none;"></div>
+        <button class="btn" id="begin-btn" style="border-color: rgba(255,255,255,0.7); color: #fff; font-size: 1.2rem; padding: 1rem 3rem; animation: pulse 2s infinite;" onclick="beginJourney()">
+          Click to Begin Journey
+        </button>
+      </div>
+
+      <div id="start-screen-modern" class="screen-overlay" style="display: none;">
+        <div class="stars-container"><div class="star-layer s1"></div><div class="star-layer s2"></div></div>
+        <div class="grid-floor"></div>
+        <div class="tech-border">
+            <div style="margin-bottom: 2rem;">
+                <h1 class="text-7xl tracking-widest font-bold hologram">THE LAST LIGHT</h1>
+                <div style="text-align: center; height: 1.5rem;">
+                    <p class="text-xs text-cyan-400 tracking-[0.5em] mt-2 type">SYSTEM.INIT(v3.2.2)</p>
+                </div>
+            </div>
+            <div class="flex flex-col items-center mt-4">
+              <button class="btn" style="border-color: rgba(255,255,255,0.5); color: #fff;" onclick="startGame()">Initialize Sequence</button>
+              <button class="btn" onclick="openShop()">Augmentations</button>
+              <button class="btn" onclick="openSettings()">System Config</button>
+              <button class="btn" onclick="openLeaderboard()">Data Archives</button>
+            </div>
+        </div>
+      </div>
+
+      <div id="start-screen-classic" class="screen-overlay" style="display: none;">
+        <h1 class="text-5xl mb-2 tracking-widest uppercase font-bold" style="color: #fff;">The Last Light</h1>
+        <div class="flex flex-col items-center mt-8">
+          <button class="btn" style="border-color: #fff; color: #fff;" onclick="openShop()">Upgrades</button>
+          <button class="btn" style="border-color: #fff; color: #fff;" onclick="openSettings()">Settings</button>
+          <button class="btn" style="border-color: #fff; color: #fff;" onclick="openLeaderboard()">Records</button>
+          <button class="btn" style="border-color: #fff; color: #fff; margin-top: 20px" onclick="startGame()">Enter the Dark</button>
+        </div>
+      </div>
+
+      <div id="settings-screen" class="screen-overlay" style="display: none; overflow-y: auto;">
+        <h1 class="text-3xl mb-4 text-gray-400 tracking-widest">SYSTEM CONFIG</h1>
+        
+        <div class="flex flex-col mb-4 custom-scroll" style="max-height: 70vh; overflow-y: auto; padding-right: 10px;">
+          <div class="setting-group">
+            <div class="setting-header">General</div>
+            <div class="setting-row"><span class="setting-label">Home Screen</span><select id="set-home" onchange="updateSettings()"><option value="modern">Modern</option><option value="classic">Classic</option></select></div>
+            <div class="setting-row"><span class="setting-label">Input Mode</span><select id="set-input" onchange="updateSettings()"><option value="kb">Keyboard/Mouse</option><option value="mobile">Mobile Touch</option></select></div>
+            <div class="setting-row"><span class="setting-label">Master Volume</span><input id="set-vol" type="range" min="0" max="1" step="0.1" value="0.3" onchange="updateSettings()"></div>
+            <div class="setting-row"><span class="setting-label">Screen Shake</span><select id="set-shake" onchange="updateSettings()"><option value="on">Enabled</option><option value="off">Disabled</option></select></div>
+            <div class="setting-row"><span class="setting-label">Particles</span><select id="set-particles" onchange="updateSettings()"><option value="high">Lush</option><option value="low">Minimal</option></select></div>
+            <div class="setting-row"><span class="setting-label">Echo Echoes</span><select id="set-echoes" onchange="updateSettings()"><option value="on">Visible</option><option value="off">Hidden</option></select></div>
+          </div>
+
+          <div class="setting-group">
+            <div class="setting-header">Control Mapping</div>
+            <div class="setting-row"><span class="setting-label">Move Up</span><button id="bind-up" class="bind-btn" onclick="remapKey('up')">W</button></div>
+            <div class="setting-row"><span class="setting-label">Move Down</span><button id="bind-down" class="bind-btn" onclick="remapKey('down')">S</button></div>
+            <div class="setting-row"><span class="setting-label">Move Left</span><button id="bind-left" class="bind-btn" onclick="remapKey('left')">A</button></div>
+            <div class="setting-row"><span class="setting-label">Move Right</span><button id="bind-right" class="bind-btn" onclick="remapKey('right')">D</button></div>
+            <div class="setting-row"><span class="setting-label">Blast</span><button id="bind-blast" class="bind-btn" onclick="remapKey('blast')">SPACE</button></div>
+            <div class="setting-row"><span class="setting-label">Pause</span><button id="bind-pause" class="bind-btn" onclick="remapKey('pause')">P</button></div>
+          </div>
+
+          <div class="setting-group">
+            <div class="setting-header">Data Management</div>
+            <button class="btn" id="btn-reset" onclick="attemptReset()" style="width: 100%; border-color: #800; color: #a55;">RESET DATA</button>
+          </div>
+        </div>
+        
+        <button class="btn" onclick="closeSettings()">Save & Back</button>
+      </div>
+
+      <div id="pause-screen" class="screen-overlay" style="display: none; background: rgba(0, 0, 0, 0.6)">
+        <h1 class="text-4xl mb-6 text-white tracking-widest">PAUSED</h1>
+        <button class="btn" onclick="togglePause()">Resume</button>
+        <button class="btn" onclick="openSettings()">System Config</button>
+        <button class="btn" onclick="resetGame()">Quit</button>
+      </div>
+
+      <div id="shop-screen" class="screen-overlay" style="display: none">
+        <h1 class="text-3xl mb-6 text-gray-400">Memory Forge</h1>
+        <p class="mb-4 text-sm text-gray-500">Available Shards: <span id="shop-currency" class="text-white">0</span></p>
+        <div class="shop-grid">
+          <div class="shop-item"><div class="text-left"><div class="text-sm text-gray-400">Velocity</div></div><button id="btn-speed" class="btn" style="width: auto; padding: 5px 15px; font-size: 0.8rem" onclick="buyUpgrade('speed')">50</button></div>
+          <div class="shop-item"><div class="text-left"><div class="text-sm text-gray-400">Radiance</div></div><button id="btn-blast" class="btn" style="width: auto; padding: 5px 15px; font-size: 0.8rem" onclick="buyUpgrade('blast')">75</button></div>
+          <div class="shop-item"><div class="text-left"><div class="text-sm text-gray-400">Resilience</div></div><button id="btn-health" class="btn" style="width: auto; padding: 5px 15px; font-size: 0.8rem" onclick="buyUpgrade('health')">60</button></div>
+        </div>
+        <button class="btn" onclick="closeShop()">Back</button>
+      </div>
+
+      <div id="leaderboard-screen" class="screen-overlay" style="display: none">
+        <h1 class="text-3xl mb-6 text-gray-400">Archives</h1>
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+          <button class="page-btn" onclick="goToPage(1)" title="First Page">⟪</button>
+          <button class="page-btn" onclick="goToPage(currentPage - 1)" title="Previous Page">‹</button>
+          <span class="page-info" id="page-info">Page 1 of 1</span>
+          <button class="page-btn" onclick="goToPage(currentPage + 1)" title="Next Page">›</button>
+          <button class="page-btn" onclick="goToPage(totalPages)" title="Last Page">⟫</button>
+        </div>
+        <table class="leaderboard-table" id="leaderboard">
+            <thead><tr><th>Rank</th><th>Player</th><th>Score</th></tr></thead>
+            <tbody id="leaderboard-body"></tbody>
+        </table>
+        <button class="btn" onclick="closeLeaderboard()">Back</button>
+      </div>
+
+      <div id="death-screen" class="screen-overlay" style="display: none">
+        <h1 class="text-4xl mb-2 text-gray-400">Extinguished.</h1>
+        <p id="cause-of-death" class="text-red-900/50 text-sm mb-4 uppercase tracking-widest"></p>
+        <p id="final-stats" class="text-white mb-6"></p>
+        <div id="name-entry-container" class="flex flex-col items-center">
+          <input type="text" id="player-name" placeholder="YOUR NAME" maxlength="12" />
+          <button class="btn" onclick="submitGameScore()">Commit to Memory</button>
+        </div>
+        <div id="death-actions" style="display: none">
+          <button class="btn" onclick="openLeaderboard()">View Records</button>
+          <button class="btn" onclick="resetGame()">Return</button>
+        </div>
+      </div>
+
+      <div id="reset-options-screen" class="screen-overlay" style="display: none">
+        <h1 class="text-3xl mb-4 text-red-400 tracking-widest">RESET OPTIONS</h1>
+        <p class="text-gray-500 mb-8 text-sm" style="max-width: 400px; text-align: center;">Choose how you want to reset your progress:</p>
+        <div class="flex flex-col items-center">
+          <button class="btn" onclick="resetWithRefund()" style="border-color: rgba(255,255,0,0.3); color: #ff6;">
+            Reset & Refund
+            <div style="font-size: 0.7rem; color: #888; margin-top: 5px;">Get all spent shards back</div>
+          </button>
+          <button class="btn btn-danger" onclick="resetComplete()">
+            Complete Wipe
+            <div style="font-size: 0.7rem; color: #666; margin-top: 5px;">Delete everything permanently</div>
+          </button>
+          <button class="btn" onclick="closeResetOptions()">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      /* --- INIT & TYPEWRITER --- */
+      window.onload = () => { document.querySelector('.type').classList.add('typewriter'); };
+
+      /* --- CURSOR FIX --- */
+      const cursor = document.getElementById('custom-cursor');
+      let cursorInitialized = false;
+      window.addEventListener('mousemove', (e) => {
+        cursor.style.left = e.clientX + 'px'; cursor.style.top = e.clientY + 'px';
+        if (!cursorInitialized) { cursorInitialized = true; updateCursorVisibility(); }
+      });
+      function updateCursorVisibility() {
+        if (!cursorInitialized) return;
+        
+        // Screens that constitute a "menu"
+        const screens = ['intro-screen','start-screen-modern','start-screen-classic','pause-screen','shop-screen','leaderboard-screen','death-screen','settings-screen','reset-options-screen'];
+        
+        // If ANY menu is currently visible (display is flex), show the cursor
+        const isMenuOpen = screens.some(s => {
+            const el = document.getElementById(s);
+            return el && window.getComputedStyle(el).display === 'flex';
+        });
+
+        // Hide cursor if we are playing the game AND no menu is open
+        if (isPlaying && !isPaused && !isMenuOpen) {
+            cursor.style.opacity = '0';
+        } else {
+            cursor.style.opacity = '1';
+        }
+      }
+
+      /* --- SETTINGS & KEYBINDS --- */
+      const defaultBinds = { up: 'w', down: 's', left: 'a', right: 'd', blast: ' ', pause: 'p' };
+      let settings = JSON.parse(localStorage.getItem("lastLightSettings_v2")) || {
+        input: 'kb', vol: 0.3, shake: 'on', particles: 'high', echoes: 'on', home: 'modern',
+        binds: defaultBinds
+      };
+      let remappingAction = null;
+
+      function openSettings() {
+        document.getElementById('start-screen-modern').style.display = 'none';
+        document.getElementById('start-screen-classic').style.display = 'none';
+        document.getElementById('pause-screen').style.display = 'none';
+        document.getElementById('settings-screen').style.display = 'flex';
+        
+        // Sync UI
+        document.getElementById('set-home').value = settings.home;
+        document.getElementById('set-input').value = settings.input;
+        document.getElementById('set-vol').value = settings.vol;
+        document.getElementById('set-shake').value = settings.shake;
+        document.getElementById('set-particles').value = settings.particles;
+        document.getElementById('set-echoes').value = settings.echoes;
+        
+        updateBindButtons();
+        updateCursorVisibility();
+      }
+
+      function updateBindButtons() {
+        for (const [action, key] of Object.entries(settings.binds)) {
+            const displayKey = key === ' ' ? 'SPACE' : key.toUpperCase();
+            document.getElementById(`bind-${action}`).innerText = displayKey;
+            document.getElementById(`bind-${action}`).classList.remove('active');
+        }
+      }
+
+      function remapKey(action) {
+        if(remappingAction) return;
+        remappingAction = action;
+        const btn = document.getElementById(`bind-${action}`);
+        btn.innerText = "...";
+        btn.classList.add('active');
+      }
+
+      function closeSettings() {
+        document.getElementById('settings-screen').style.display = 'none';
+        if (isPlaying) {
+          document.getElementById('pause-screen').style.display = 'flex';
+        } else {
+          showStartScreen();
+        }
+        updateCursorVisibility();
+      }
+
+      function showStartScreen() {
+        if (settings.home === 'classic') {
+          document.getElementById('start-screen-classic').style.display = 'flex';
+          document.getElementById('start-screen-modern').style.display = 'none';
+        } else {
+          document.getElementById('start-screen-modern').style.display = 'flex';
+          document.getElementById('start-screen-classic').style.display = 'none';
+        }
+      }
+
+      function updateSettings() {
+        settings.home = document.getElementById('set-home').value;
+        settings.input = document.getElementById('set-input').value;
+        settings.vol = parseFloat(document.getElementById('set-vol').value);
+        settings.shake = document.getElementById('set-shake').value;
+        settings.particles = document.getElementById('set-particles').value;
+        settings.echoes = document.getElementById('set-echoes').value;
+        
+        localStorage.setItem("lastLightSettings_v2", JSON.stringify(settings));
+        masterGain.gain.setTargetAtTime(settings.vol, audioCtx.currentTime, 0.1);
+        const isMobile = settings.input === 'mobile';
+        document.querySelectorAll('.mobile-controls').forEach(el => el.style.display = isMobile ? 'block' : 'none');
+        document.getElementById('kb-hint').style.display = isMobile ? 'none' : 'block';
+        updateKbHint();
+      }
+
+      function updateKbHint() {
+        const b = settings.binds;
+        const up = b.up.toUpperCase(); const left = b.left.toUpperCase(); const down = b.down.toUpperCase(); const right = b.right.toUpperCase();
+        const blast = b.blast === ' ' ? 'SPACE' : b.blast.toUpperCase();
+        const pause = b.pause.toUpperCase();
+        document.getElementById('kb-hint').innerHTML = `[${up},${left},${down},${right}] Move | [${blast}] Blast | [${pause}] Pause | [M] Mute`;
+      }
+
+      /* --- RESET DATA LOGIC --- */
+      let resetStage = 0;
+      let resetTimeout = null;
+      function attemptReset() {
+        const btn = document.getElementById('btn-reset');
+        if (resetStage === 0) {
+            btn.innerText = "ARE YOU SURE?";
+            btn.style.borderColor = "red";
+            btn.style.color = "red";
+            resetStage = 1;
+            resetTimeout = setTimeout(() => {
+                if(resetStage === 1) {
+                    resetStage = 0;
+                    btn.innerText = "RESET DATA";
+                    btn.style.borderColor = "#800";
+                    btn.style.color = "#a55";
+                }
+            }, 5000);
+        } else {
+            clearTimeout(resetTimeout);
+            showResetOptions();
+        }
+      }
+
+      function showResetOptions() {
+        document.getElementById('settings-screen').style.display = 'none';
+        document.getElementById('reset-options-screen').style.display = 'flex';
+        updateCursorVisibility();
+      }
+
+      function resetWithRefund() {
+        // Calculate total shards spent on upgrades
+        const speedSpent = Array.from({length: saveData.upgrades.speed}, (_, i) => costs.speed + i * 50).reduce((a, b) => a + b, 0);
+        const blastSpent = Array.from({length: saveData.upgrades.blast}, (_, i) => costs.blast + i * 50).reduce((a, b) => a + b, 0);
+        const healthSpent = Array.from({length: saveData.upgrades.health}, (_, i) => costs.health + i * 50).reduce((a, b) => a + b, 0);
+        const totalRefund = speedSpent + blastSpent + healthSpent;
+        
+        // Reset upgrades but keep shards + refund
+        saveData.upgrades = { speed: 0, blast: 0, health: 0 };
+        saveData.shards += totalRefund;
+        save();
+        
+        closeResetOptions();
+        alert(`Upgrades reset! Refunded ${totalRefund.toFixed(1)} shards.`);
+      }
+
+      function resetComplete() {
+        localStorage.clear();
+        location.reload();
+      }
+
+      function closeResetOptions() {
+        document.getElementById('reset-options-screen').style.display = 'none';
+        document.getElementById('settings-screen').style.display = 'flex';
+        resetStage = 0;
+        const btn = document.getElementById('btn-reset');
+        btn.innerText = "RESET DATA";
+        btn.style.borderColor = "#800";
+        btn.style.color = "#a55";
+        updateCursorVisibility();
+      }
+
+      /* --- SERVER FUNCTIONS --- */ 
+      const SERVER_URL = 'https://d733f197d250.ngrok-free.app';
+      const GAME_VERSION = 'v4.2'; // Change this when you want a new leaderboard
+      
+      async function submitScore(playerName, scoreValue) {
+        try { 
+          const response = await fetch(`${SERVER_URL}/submit-score`, { 
+            method: 'POST', 
+            headers: { 
+              'Content-Type': 'application/json',
+              'ngrok-skip-browser-warning': 'true'
+            }, 
+            body: JSON.stringify({ 
+              name: playerName, 
+              score: scoreValue,
+              version: GAME_VERSION 
+            }) 
+          });
+          if (!response.ok) throw new Error('Server error');
+          console.log('Score submitted successfully');
+        } catch (error) { 
+          console.error('Failed to submit score:', error); 
+        }
+      }
+      
+      let allScores = [];
+      let currentPage = 1;
+      let totalPages = 1;
+      const scoresPerPage = 10;
+      async function loadLeaderboard() {
+        try {
+            const response = await fetch(`${SERVER_URL}/leaderboard?version=${GAME_VERSION}`, {
+              headers: { 'ngrok-skip-browser-warning': 'true' }
+            });
+            if (!response.ok) throw new Error('Server error');
+            allScores = await response.json();
+            totalPages = Math.max(1, Math.ceil(allScores.length / scoresPerPage));
+            currentPage = 1;
+            displayPage(currentPage);
+        } catch (error) { 
+          console.error('Failed to load leaderboard:', error);
+          document.getElementById('leaderboard-body').innerHTML = '<tr><td colspan="3" style="text-align:center;">Server Offline</td></tr>';
+          document.getElementById('page-info').innerText = 'Page 1 of 1';
+        }
+      }
+      function displayPage(page) {
+        const tableBody = document.getElementById('leaderboard-body');
+        tableBody.innerHTML = '';
+        
+        if (allScores.length === 0) {
+          tableBody.innerHTML = '<tr><td colspan="3" style="text-align:center;">No Scores Yet</td></tr>';
+          document.getElementById('page-info').innerText = 'Page 1 of 1';
+          return;
+        }
+        const startIndex = (page - 1) * scoresPerPage;
+        const endIndex = Math.min(startIndex + scoresPerPage, allScores.length);
+        const pageScores = allScores.slice(startIndex, endIndex);
+        pageScores.forEach((entry, index) => {
+          const rank = startIndex + index + 1;
+          tableBody.innerHTML += `<tr><td>${rank}</td><td>${entry.name}</td><td>${entry.score}</td></tr>`;
+        });
+        document.getElementById('page-info').innerText = `Page ${page} of ${totalPages}`;
+      }
+      function goToPage(page) {
+        if (page < 1 || page > totalPages || page === currentPage) return;
+        currentPage = page;
+        displayPage(currentPage);
+      }
+
+      /* --- CORE LOGIC --- */
+      function mobileKey(action, state) { keys[settings.binds[action]] = state; if(state && !audioStarted) initAudio(); }
+      function mobileBlast() { if(isPlaying && !isPaused) triggerBlast(); }
+
+      let saveData = JSON.parse(localStorage.getItem("lastLightSave_v4")) || { shards: 0, upgrades: { speed: 0, blast: 0, health: 0 } };
+      function save() { localStorage.setItem("lastLightSave_v4", JSON.stringify(saveData)); }
+
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      let masterGain = audioCtx.createGain(); masterGain.connect(audioCtx.destination);
+      masterGain.gain.value = settings.vol;
+      let isMuted = false, audioStarted = false;
+      function initAudio() { if (audioStarted) return; if (audioCtx.state === "suspended") audioCtx.resume(); const bgMusic = document.getElementById("bg-music"); if (bgMusic) { bgMusic.volume = 0.4; bgMusic.play().catch(() => {}); audioStarted = true; updateAudioIcon(); } }
+      function toggleAudio() { if (audioCtx.state === "suspended") audioCtx.resume(); isMuted = !isMuted; const bgMusic = document.getElementById("bg-music"); if (bgMusic) isMuted ? bgMusic.pause() : bgMusic.play().catch(() => {}); masterGain.gain.setTargetAtTime(isMuted ? 0 : settings.vol, audioCtx.currentTime, 0.1); updateAudioIcon(); }
+      function updateAudioIcon() { 
+        document.getElementById("audio-toggle").style.opacity = isMuted ? 0.5 : 1;
+        document.getElementById("audio-icon-on").style.display = isMuted ? 'none' : 'block';
+        document.getElementById("audio-icon-off").style.display = isMuted ? 'block' : 'none';
+      }
+
+      function beginJourney() {
+        const introScreen = document.getElementById('intro-screen');
+        const beginBtn = document.getElementById('begin-btn');
+        const warpEffect = document.getElementById('warp-effect');
+        
+        // Start audio
+        initAudio();
+        // Hide button
+        beginBtn.style.opacity = '0';
+        beginBtn.style.transition = 'opacity 0.5s';
+        setTimeout(() => {
+          warpEffect.style.opacity = '1';
+          
+          // Transition to start screen
+          setTimeout(() => {
+            introScreen.style.display = 'none';
+            showStartScreen();
+          }, 18);
+        }, 50);
+      }
+      function playSound(type) {
+        if (isMuted) return;
+        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.connect(gain); gain.connect(masterGain); const now = audioCtx.currentTime;
+        if (type === "collect") { osc.frequency.setValueAtTime(880, now); gain.gain.setValueAtTime(0.3, now); osc.start(); osc.stop(now + 0.3); }
+        else if (type === "hit") { osc.type = "square"; osc.frequency.setValueAtTime(60, now); gain.gain.setValueAtTime(0.4, now); osc.start(); osc.stop(now + 0.15); }
+        else if (type === "blast") { osc.type = "triangle"; osc.frequency.setValueAtTime(200, now); gain.gain.setValueAtTime(0.5, now); osc.start(); osc.stop(now + 0.2); }
+        else if (type === "level") { osc.type = "sine"; osc.frequency.setValueAtTime(220, now); osc.frequency.linearRampToValueAtTime(880, now + 0.5); gain.gain.setValueAtTime(0.3, now); osc.start(); osc.stop(now + 0.5); }
+      }
+
+      /* --- ENEMY CLASSES --- */
+      class Shadow {
+        constructor() { this.spawn(); this.size = 14; this.wobble = Math.random() * 10; }
+        spawn() { const side = Math.floor(Math.random() * 4); if (side === 0) { this.x = Math.random() * width; this.y = -50; } else if (side === 1) { this.x = width + 50; this.y = Math.random() * height; } else if (side === 2) { this.x = Math.random() * width; this.y = height + 50; } else { this.x = -50; this.y = Math.random() * height; } this.speed = (Math.random() * 1.5 + 1.5) * (1 + level * 0.1) * 60; }
+        update() { const dx = player.x - this.x, dy = player.y - this.y, dist = Math.hypot(dx, dy); this.x += (dx / dist) * this.speed * deltaTime; this.y += (dy / dist) * this.speed * deltaTime; if (settings.particles === 'high' && Math.random() < 0.3) particles.push(new TrailParticle(this.x, this.y, "rgba(255, 0, 0, opacity)")); }
+        draw() { ctx.fillStyle = "#000"; ctx.beginPath(); ctx.arc(this.x, this.y, this.size + Math.sin(this.wobble) * 3, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = "rgba(255, 0, 0, 1)"; ctx.lineWidth = 2; ctx.stroke(); }
+      }
+      class Whisperer {
+        constructor() { this.spawn(); this.size = 45; this.targetX = Math.random() * width; this.targetY = Math.random() * height; this.speed = 1.2 * 60; this.stunTimer = 0; }
+        spawn() { const side = Math.floor(Math.random() * 4); if (side === 0) { this.x = Math.random() * width; this.y = -60; } else if (side === 1) { this.x = width + 60; this.y = Math.random() * height; } else if (side === 2) { this.x = Math.random() * width; this.y = height + 60; } else { this.x = -60; this.y = Math.random() * height; } }
+        update() { if (this.stunTimer > 0) { this.stunTimer -= 60 * deltaTime; return; } const dx = this.targetX - this.x, dy = this.targetY - this.y, dist = Math.hypot(dx, dy); if (dist < 30) { this.targetX = Math.random() * width; this.targetY = Math.random() * height; } else { this.x += (dx / dist) * this.speed * deltaTime; this.y += (dy / dist) * this.speed * deltaTime; } }
+        draw() { ctx.strokeStyle = this.stunTimer > 0 ? "rgba(100, 100, 100, 0.4)" : "rgba(150, 0, 255, 0.8)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(this.x, this.y, this.size, this.size * 0.7, Math.sin(Date.now() * 0.002), 0, Math.PI * 2); ctx.stroke(); }
+      }
+      class Bouncer {
+        constructor() { this.size = 20; this.x = Math.random() * width; this.y = Math.random() * height; this.vx = (Math.random() > 0.5 ? 1 : -1) * (3 + level * 0.1) * 60; this.vy = (Math.random() > 0.5 ? 1 : -1) * (3 + level * 0.1) * 60; this.colors = ["#ff00ff", "#00ffff", "#ffff00", "#ff0000", "#00ff00"]; this.colorIndex = 0; }
+        update() { this.x += this.vx * deltaTime; this.y += this.vy * deltaTime; let bounced = false; if (this.x < 10 || this.x > width - 10) { this.vx *= -1; bounced = true; } if (this.y < 10 || this.y > height - 10) { this.vy *= -1; bounced = true; } if (bounced) this.colorIndex = (this.colorIndex + 1) % this.colors.length; }
+        draw() { ctx.fillStyle = "#000"; ctx.fillRect(this.x - 10, this.y - 10, 20, 20); ctx.strokeStyle = this.colors[this.colorIndex]; ctx.lineWidth = 2; ctx.strokeRect(this.x - 10, this.y - 10, 20, 20); }
+      }
+      class Lurker {
+        constructor() { this.x = Math.random() * width; this.y = Math.random() * height; this.size = 12; this.speed = 1.8 * 60; }
+        update() { const dx = player.x - this.x, dy = player.y - this.y, dist = Math.hypot(dx, dy); this.x += (dx / dist) * this.speed * deltaTime; this.y += (dy / dist) * this.speed * deltaTime; }
+        draw() { const dist = Math.hypot(player.x - this.x, player.y - this.y); const opacity = Math.max(0, 1 - (dist / 200)); if (opacity > 0) { ctx.fillStyle = `rgba(0, 0, 0, ${opacity})`; ctx.strokeStyle = `rgba(0, 255, 255, ${opacity})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); } }
+      }
+      class Pillar {
+        constructor() { this.x = Math.random() * width; this.y = Math.random() * height; this.radius = 0; this.maxRadius = 120; this.life = 1.0; this.growing = true; }
+        update() { if (this.growing) { this.radius += 2.5 * 60 * deltaTime; if (this.radius >= this.maxRadius) this.growing = false; } else { this.life -= 0.01 * 60 * deltaTime; } }
+        draw() { ctx.fillStyle = `rgba(0, 0, 0, ${this.life * 0.5})`; ctx.strokeStyle = `rgba(255, 255, 0, ${this.life})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+      }
+      class Glitcher {
+        constructor() { this.x = Math.random() * width; this.y = Math.random() * height; this.size = 15; this.timer = 60; }
+        update() { const dx = player.x - this.x, dy = player.y - this.y, dist = Math.hypot(dx, dy); this.x += (dx / dist) * 2.5 * 60 * deltaTime; this.y += (dy / dist) * 2.5 * 60 * deltaTime; this.timer -= 60 * deltaTime; if (this.timer <= 0) { this.x += (Math.random() - 0.5) * 250; this.y += (Math.random() - 0.5) * 250; this.timer = 60 + Math.random() * 60; } }
+        draw() { ctx.fillStyle = "#000"; ctx.strokeStyle = "#0f0"; ctx.lineWidth = 2; const off = (Math.random() - 0.5) * 10; ctx.fillRect(this.x - 7.5, this.y - 7.5 + off, 15, 15); ctx.strokeRect(this.x - 7.5, this.y - 7.5 + off, 15, 15); }
+      }
+      class TrailParticle {
+        constructor(x, y, color) { this.x = x; this.y = y; this.color = color; this.life = 1.0; this.size = Math.random() * 4 + 1; }
+        update() { this.life -= 0.04 * 60 * deltaTime; }
+        draw() { ctx.fillStyle = this.color.replace("opacity", this.life * 0.8); ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); }
+      }
+      class BlastEffect {
+        constructor(x, y) { this.x = x; this.y = y; this.radius = 10; this.life = 1.0; this.maxRadius = 150 + saveData.upgrades.blast * 25; }
+        update() { this.radius += 10 * 60 * deltaTime; this.life -= 0.05 * 60 * deltaTime; }
+        draw() { ctx.strokeStyle = `rgba(255, 255, 255, ${this.life})`; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.stroke(); }
+      }
+      class Echo {
+        constructor(text) { this.text = text; this.x = Math.random() * (width - 300) + 150; this.y = Math.random() * (height - 200) + 100; this.life = 1.0; }
+        update() { this.life -= 0.005 * 60 * deltaTime; }
+        draw() { if (settings.echoes === 'off') return; ctx.fillStyle = `rgba(255, 255, 255, ${this.life * 0.6})`; ctx.font = "bold 18px Courier New"; ctx.fillText(this.text, this.x, this.y); }
+      }
+
+      /* --- GAME ENGINE --- */
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+      const healthDisplay = document.getElementById("health-power"), scoreDisplay = document.getElementById("score"), killDisplay = document.getElementById("kill-count"), levelDisplay = document.getElementById("level-display"), currencyDisplay = document.getElementById("currency-display");
+      const shopScreen = document.getElementById("shop-screen"), deathScreen = document.getElementById("death-screen"), leaderboardScreen = document.getElementById("leaderboard-screen"), pauseScreen = document.getElementById("pause-screen");
+      let width, height, isPlaying = false, isPaused = false;
+      let lastTime = 0;
+      let deltaTime = 0;
+      let player = { x: 0, y: 0, radius: 8 };
+      let memories = [], shadows = [], whisperers = [], echoes = [], particles = [], blasts = [];
+      let bouncers = [], lurkers = [], pillars = [], glitchers = [];
+      let health = 100, score = 0, rescued = 0, level = 1, shakeAmount = 0;
+      const phrases = ["Nowhere to hide.", "Run.", "They hunger.", "Don't look back.", "It follows.", "The void stares.", "Shadows dance.", "Light fades.", "Memory leaks.", "Not alone."];
+      const keys = {};
+
+      window.addEventListener("keydown", (e) => {
+        if(remappingAction) {
+            settings.binds[remappingAction] = e.key.toLowerCase();
+            updateSettings();
+            remappingAction = null;
+            updateBindButtons();
+            return;
+        }
+        const k = e.key.toLowerCase();
+        // Check dynamic bindings
+        if (k === settings.binds.pause || e.code === "Escape") togglePause();
+        if (k === "m") toggleAudio();
+        if (k === settings.binds.blast && isPlaying && !isPaused) triggerBlast();
+        
+        // Map movement keys to virtual boolean map
+        if(k === settings.binds.up) keys.up = true;
+        if(k === settings.binds.down) keys.down = true;
+        if(k === settings.binds.left) keys.left = true;
+        if(k === settings.binds.right) keys.right = true;
+      });
+      window.addEventListener("keyup", (e) => { 
+        const k = e.key.toLowerCase();
+        if(k === settings.binds.up) keys.up = false;
+        if(k === settings.binds.down) keys.down = false;
+        if(k === settings.binds.left) keys.left = false;
+        if(k === settings.binds.right) keys.right = false;
+      });
+      function resize() { width = canvas.width = window.innerWidth; height = canvas.height = window.innerHeight; }
+      window.addEventListener("resize", resize); resize();
+
+      function togglePause() { if (!isPlaying || deathScreen.style.display === "flex") return; isPaused = !isPaused; pauseScreen.style.display = isPaused ? "flex" : "none"; updateCursorVisibility(); }
+      function openLeaderboard() { 
+        document.getElementById('start-screen-modern').style.display = 'none';
+        document.getElementById('start-screen-classic').style.display = 'none';
+        deathScreen.style.display = "none"; 
+        leaderboardScreen.style.display = "flex"; 
+        updateCursorVisibility(); 
+        loadLeaderboard();
+      }
+      function closeLeaderboard() { 
+        leaderboardScreen.style.display = 'none';
+        showStartScreen();
+        updateCursorVisibility(); 
+      }
+      const costs = { speed: 50, blast: 75, health: 60 };
+      function openShop() { 
+        document.getElementById('start-screen-modern').style.display = 'none';
+        document.getElementById('start-screen-classic').style.display = 'none';
+        shopScreen.style.display = "flex";
+        updateShopUI(); 
+        updateCursorVisibility(); 
+      }
+      function closeShop() { 
+        shopScreen.style.display = 'none';
+        showStartScreen();
+        updateCursorVisibility(); 
+      }
+      function updateShopUI() { document.getElementById("shop-currency").innerText = Math.floor(saveData.shards); ['speed', 'blast', 'health'].forEach(t => { const btn = document.getElementById(`btn-${t}`), lvl = saveData.upgrades[t], cost = costs[t] + lvl * 50; btn.innerText = `${cost} (Lvl ${lvl})`; btn.disabled = saveData.shards < cost; }); }
+      function buyUpgrade(t) { const lvl = saveData.upgrades[t], cost = costs[t] + lvl * 50; if (saveData.shards >= cost) { saveData.shards -= cost; saveData.upgrades[t]++; save(); updateShopUI(); playSound("collect"); } }
+
+      function startGame() { 
+        document.getElementById('start-screen-modern').style.display = 'none';
+        document.getElementById('start-screen-classic').style.display = 'none';
+        resetGameVariables(); 
+        isPlaying = true; 
+        isPaused = false; 
+        updateCursorVisibility(); 
+        requestAnimationFrame(gameLoop);
+      }
+      function resetGameVariables() { health = 100 + saveData.upgrades.health * 20; score = 0; rescued = 0; level = 1; shakeAmount = 0; memories = []; shadows = []; whisperers = []; echoes = []; particles = []; blasts = []; bouncers = []; lurkers = []; pillars = []; glitchers = []; player.x = width / 2; player.y = height / 2; }
+      function resetGame() { location.reload(); }
+      function endGame(reason) { isPlaying = false; document.getElementById("final-stats").innerText = `Level ${level} | Memories: ${score} | Rescued: ${rescued}`; deathScreen.style.display = "flex"; document.getElementById("cause-of-death").innerText = reason; document.getElementById("name-entry-container").style.display = "flex"; document.getElementById("death-actions").style.display = "none"; save(); updateCursorVisibility(); }
+      function submitGameScore() { const name = document.getElementById("player-name").value.trim() || "Wanderer"; submitScore(name, score); document.getElementById("name-entry-container").style.display = "none"; document.getElementById("death-actions").style.display = "block"; }
+
+      function triggerBlast() { 
+        if (health < 15) return; health -= 15; 
+        if (settings.shake === 'on') shakeAmount = 15; 
+        const blast = new BlastEffect(player.x, player.y); blasts.push(blast); playSound("blast"); 
+        const initial = shadows.length; shadows = shadows.filter(s => Math.hypot(s.x - player.x, s.y - player.y) > blast.maxRadius); 
+        const killed = initial - shadows.length; 
+        if (killed > 0) { rescued += killed; saveData.shards += killed * 0.1; save(); } 
+        whisperers.forEach(w => { if (Math.hypot(w.x - player.x, w.y - player.y) < blast.maxRadius) w.stunTimer = 120; }); 
+      }
+
+      function update() {
+        if (!isPlaying || isPaused) return;
+        if (shakeAmount > 0) shakeAmount *= Math.pow(0.9, 60 * deltaTime);
+        let dx = 0, dy = 0;
+        if (keys.up) dy -= 1; if (keys.down) dy += 1; if (keys.left) dx -= 1; if (keys.right) dx += 1;
+        if (dx !== 0 && dy !== 0) { const m = Math.hypot(dx, dy); dx /= m; dy /= m; }
+        player.x += dx * (4.2 + saveData.upgrades.speed * 0.6) * 60 * deltaTime;
+        player.y += dy * (4.2 + saveData.upgrades.speed * 0.6) * 60 * deltaTime;
+        if (player.x < 0) player.x = width; if (player.x > width) player.x = 0; if (player.y < 0) player.y = height; if (player.y > height) player.y = 0;
+
+        memories = memories.filter(m => {
+          if (Math.hypot(m.x - player.x, m.y - player.y) < 28) {
+            health = Math.min(100 + saveData.upgrades.health * 20, health + 10); score++; saveData.shards++; playSound("collect");
+            if (score % 8 === 0) { level++; playSound("level"); const n = document.getElementById("level-popup"); n.style.opacity = 1; setTimeout(() => n.style.opacity = 0, 2000); }
+            return false;
+          } return true;
+        });
+        shadows.forEach(s => { s.update(); if (Math.hypot(s.x - player.x, s.y - player.y) < s.size + player.radius) { health -= 30; playSound("hit"); s.spawn(); if (settings.shake === 'on') shakeAmount = 10; if (health <= 0) endGame("Torn apart by Shadows"); } });
+        whisperers.forEach(w => { w.update(); if (Math.hypot(w.x - player.x, w.y - player.y) < w.size * 2 && w.stunTimer <= 0) health -= 0.5; });
+        if (level >= 10) {
+          bouncers.forEach(b => { b.update(); if (Math.hypot(b.x - player.x, b.y - player.y) < 18) { health -= 20; b.vx *= -1; b.vy *= -1; } });
+          lurkers.forEach(l => { l.update(); if (Math.hypot(l.x - player.x, l.y - player.y) < 18) { health -= 15; l.x += (Math.random()-0.5)*200; } });
+          pillars.forEach(p => { p.update(); if (!p.growing && Math.hypot(p.x - player.x, p.y - player.y) < p.radius) health -= 0.8; });
+          glitchers.forEach(g => { g.update(); if (Math.hypot(g.x - player.x, g.y - player.y) < 20) health -= 25; });
+          pillars = pillars.filter(p => p.life > 0);
+          if (Math.random() < 0.005 && bouncers.length < 3) bouncers.push(new Bouncer());
+          if (Math.random() < 0.005 && lurkers.length < 3) lurkers.push(new Lurker());
+          if (Math.random() < 0.005 && pillars.length < 2) pillars.push(new Pillar());
+          if (Math.random() < 0.005 && glitchers.length < 3) glitchers.push(new Glitcher());
+        }
+
+        if (health <= 0) { endGame("Consumed by the Dark"); return; }
+        blasts.forEach(b => b.update()); blasts = blasts.filter(b => b.life > 0);
+        if (Math.random() < 0.018) memories.push({ x: Math.random() * (width - 150) + 75, y: Math.random() * (height - 150) + 75, pulse: Math.random() * Math.PI });
+        if (Math.random() < Math.min(0.1, 0.01 + level * 0.005)) shadows.push(new Shadow());
+        if (score > 5 && whisperers.length < Math.min(6, 1 + Math.floor(level / 3)) && Math.random() < 0.01) whisperers.push(new Whisperer());
+        if (Math.random() < 0.004) echoes.push(new Echo(phrases[Math.floor(Math.random() * phrases.length)]));
+        particles = particles.filter(p => { p.update(); return p.life > 0; });
+        echoes = echoes.filter(e => { e.update(); return e.life > 0; });
+        healthDisplay.innerText = Math.max(0, Math.floor(health)); scoreDisplay.innerText = score; killDisplay.innerText = rescued; levelDisplay.innerText = level; currencyDisplay.innerText = saveData.shards.toFixed(1);
+      }
+
+      function draw() {
+        if (isPaused) return;
+        ctx.save();
+        if (shakeAmount > 0.5) ctx.translate((Math.random() - 0.5) * shakeAmount, (Math.random() - 0.5) * shakeAmount);
+        ctx.fillStyle = "#050505";
+        ctx.fillRect(0, 0, width, height);
+        echoes.forEach(e => e.draw());
+        ctx.fillStyle = "#fff";
+        memories.forEach(m => { m.pulse += 0.07; const s = Math.max(3, 6 + Math.sin(m.pulse) * 4); ctx.beginPath(); ctx.arc(m.x, m.y, s, 0, Math.PI * 2); ctx.fill(); });
+        particles.forEach(p => p.draw()); shadows.forEach(s => s.draw()); whisperers.forEach(w => w.draw()); blasts.forEach(b => b.draw()); bouncers.forEach(b => b.draw()); lurkers.forEach(l => l.draw());
+        pillars.forEach(p => p.draw()); glitchers.forEach(g => g.draw());
+        ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
+
+      function gameLoop(currentTime) {
+        if (!isPlaying) return;
+        // Calculate delta time in seconds
+        if (lastTime === 0) lastTime = currentTime;
+        deltaTime = Math.min((currentTime - lastTime) / 1000, 0.1); // Cap at 0.1s to prevent huge jumps
+        lastTime = currentTime;
+        if (!isPaused) { update(); draw(); }
+        requestAnimationFrame(gameLoop);
+      }
+      updateSettings(); updateCursorVisibility(); updateAudioIcon();
+    </script>
+  </body>
+</html>
