@@ -189,7 +189,7 @@
             <div style="margin-bottom: 2rem;">
                 <h1 class="text-7xl tracking-widest font-bold hologram">THE LAST LIGHT</h1>
                 <div style="text-align: center; height: 1.5rem;">
-                    <p class="text-xs text-cyan-400 tracking-[0.5em] mt-2 type">SYSTEM.INIT(v3.2.2)</p>
+                    <p class="text-xs text-cyan-400 tracking-[0.5em] mt-2 type">SYSTEM.INIT(v3.2.3)</p>
                 </div>
             </div>
             <div class="flex flex-col items-center mt-4">
@@ -249,6 +249,8 @@
         <button class="btn" onclick="togglePause()">Resume</button>
         <button class="btn" onclick="openSettings()">System Config</button>
         <button class="btn" onclick="resetGame()">Quit</button>
+        <button class="btn" onclick="restartAfterDeath()" style="margin-top:6px;">Restart</button>
+  </div>
       </div>
 
       <div id="shop-screen" class="screen-overlay" style="display: none">
@@ -279,18 +281,27 @@
       </div>
 
       <div id="death-screen" class="screen-overlay" style="display: none">
-        <h1 class="text-4xl mb-2 text-gray-400">Extinguished.</h1>
-        <p id="cause-of-death" class="text-red-900/50 text-sm mb-4 uppercase tracking-widest"></p>
-        <p id="final-stats" class="text-white mb-6"></p>
-        <div id="name-entry-container" class="flex flex-col items-center">
-          <input type="text" id="player-name" placeholder="YOUR NAME" maxlength="12" />
-          <button class="btn" onclick="submitGameScore()">Commit to Memory</button>
-        </div>
-        <div id="death-actions" style="display: none">
-          <button class="btn" onclick="openLeaderboard()">View Records</button>
-          <button class="btn" onclick="resetGame()">Return</button>
-        </div>
-      </div>
+  <h1 class="text-4xl mb-2 text-gray-400">Extinguished.</h1>
+  <p id="cause-of-death" class="text-red-900/50 text-sm mb-4 uppercase tracking-widest"></p>
+  <p id="final-stats" class="text-white mb-6"></p>
+
+  <!-- Name entry / submit -->
+  <div id="name-entry-container" class="flex flex-col items-center">
+    <input type="text" id="player-name" placeholder="YOUR NAME" maxlength="24" />
+    <div style="display:flex; gap:12px; flex-direction:column; align-items:center;">
+      <button class="btn" onclick="submitGameScore()">Commit to Memory</button>
+    </div> <!-- <-- close the inner div -->
+  </div> <!-- <-- close name-entry-container -->
+
+  <!-- Post-submit actions (hidden until submitGameScore runs) -->
+  <div id="death-actions" style="display: none; gap:12px; flex-direction:column; align-items:center;">
+    <button class="btn" onclick="openLeaderboard()">View Records</button>
+    <button class="btn" onclick="restartAfterDeath()">Restart</button>
+    <button class="btn" onclick="resetGame()">Return</button>
+  </div>
+</div>
+
+
 
       <div id="reset-options-screen" class="screen-overlay" style="display: none">
         <h1 class="text-3xl mb-4 text-red-400 tracking-widest">RESET OPTIONS</h1>
@@ -490,7 +501,7 @@
 
       /* --- SERVER FUNCTIONS --- */ 
       const SERVER_URL = 'https://d733f197d250.ngrok-free.app';
-      const GAME_VERSION = 'v1.0'; // Change this when you want a new leaderboard
+      const GAME_VERSION = 'v4.2'; // Change this when you want a new leaderboard
       
       async function submitScore(playerName, scoreValue) {
         try { 
@@ -739,9 +750,42 @@
         requestAnimationFrame(gameLoop);
       }
       function resetGameVariables() { health = 100 + saveData.upgrades.health * 20; score = 0; rescued = 0; level = 1; shakeAmount = 0; memories = []; shadows = []; whisperers = []; echoes = []; particles = []; blasts = []; bouncers = []; lurkers = []; pillars = []; glitchers = []; player.x = width / 2; player.y = height / 2; }
-      function resetGame() { location.reload(); }
+      function resetGame() { 
+        deathScreen.style.display = 'none';
+        showStartScreen();
+        updateCursorVisibility();
+      }
       function endGame(reason) { isPlaying = false; document.getElementById("final-stats").innerText = `Level ${level} | Memories: ${score} | Rescued: ${rescued}`; deathScreen.style.display = "flex"; document.getElementById("cause-of-death").innerText = reason; document.getElementById("name-entry-container").style.display = "flex"; document.getElementById("death-actions").style.display = "none"; save(); updateCursorVisibility(); }
       function submitGameScore() { const name = document.getElementById("player-name").value.trim() || "Wanderer"; submitScore(name, score); document.getElementById("name-entry-container").style.display = "none"; document.getElementById("death-actions").style.display = "block"; }
+
+function restartAfterDeath() {
+  // Hide death screen
+  const deathScreen = document.getElementById("death-screen");
+  if (deathScreen) deathScreen.style.display = "none";
+
+  // Reset important timing so animation frame loop starts fresh
+  lastTime = 0;
+
+  // Reset game variables (uses your existing reset logic to honor upgrades/save)
+  resetGameVariables();
+
+  // Ensure flags
+  isPlaying = true;
+  isPaused = false;
+
+  // Hide any other UI overlays that might still be open
+  document.getElementById('start-screen-modern').style.display = 'none';
+  document.getElementById('start-screen-classic').style.display = 'none';
+  document.getElementById('pause-screen').style.display = 'none';
+  document.getElementById('shop-screen').style.display = 'none';
+  document.getElementById('leaderboard-screen').style.display = 'none';
+  document.getElementById('settings-screen').style.display = 'none';
+  document.getElementById('reset-options-screen').style.display = 'none';
+
+  updateCursorVisibility();
+  // Kick off the game loop again
+  requestAnimationFrame(gameLoop);
+}
 
       function triggerBlast() { 
         if (health < 15) return; health -= 15; 
@@ -822,6 +866,4 @@
       updateSettings(); updateCursorVisibility(); updateAudioIcon();
     </script>
   </body>
-
 </html>
-
