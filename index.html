@@ -4,7 +4,54 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>The Last Light</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com">
+// --- Save-on-change helper (added) ---
+function saveOnChange(mutator) {
+  mutator();
+  localStorage.setItem("lastLightSettings_v2", JSON.stringify(settings));
+}
+
+
+// --- Auto-save ALL settings on change/input (added) ---
+document.addEventListener('change', (e) => {
+  if (e.target.closest && e.target.closest('#settings-screen')) {
+    if (typeof updateSettings === 'function') updateSettings();
+  }
+});
+
+document.addEventListener('input', (e) => {
+  if (e.target.closest && e.target.closest('#settings-screen')) {
+    if (typeof updateSettings === 'function') updateSettings();
+  }
+});
+
+
+// --- Ensure custom cursor is visible on first mouse move ---
+document.addEventListener('mousemove', () => {
+  const c = document.getElementById('custom-cursor');
+  if (c) c.style.opacity = '1';
+}, { once: true });
+
+/* ==== CUSTOM CURSOR (FORCED VISIBLE) ==== */
+html, body, * {
+  cursor: none !important;
+}
+
+#custom-cursor {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #7df9ff;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 999999;
+  transform: translate(-50%, -50%);
+}
+
+
+</script>
     <style>
       /* --- CORE STYLES --- */
       body {
@@ -45,16 +92,18 @@
       .tech-border::after { bottom: -2px; right: -2px; border-left: none; border-top: none; }
 
       /* --- CUSTOM CURSOR --- */
-      #custom-cursor { 
-        width: 24px; height: 24px; 
-        border: 2px solid rgba(255, 255, 255, 0.9); 
-        border-radius: 50%; position: fixed; 
-        pointer-events: none; z-index: 10000; /* High Z-Index to stay on top */
-        opacity: 0; transform: translate(-50%, -50%); 
-        transition: opacity 0.2s, width 0.2s, height 0.2s; 
-        box-shadow: 0 0 15px rgba(255, 255, 255, 0.5); 
-        background: rgba(255, 255, 255, 0.05); 
-      }
+    #custom-cursor { 
+      width: 24px; height: 24px; 
+      border: 2px solid rgba(255, 255, 255, 0.9); 
+      border-radius: 50%; position: fixed; 
+      pointer-events: none; z-index: 10000;
+      opacity: 1; /* Changed from 0 to 1 */
+      transform: translate(-50%, -50%); 
+      transition: width 0.2s, height 0.2s; /* Removed opacity transition */
+      box-shadow: 0 0 15px rgba(255, 255, 255, 0.5); 
+      background: rgba(255, 255, 255, 0.05); 
+    }
+    
       #custom-cursor::after { content: ''; position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; background: white; border-radius: 50%; transform: translate(-50%, -50%); }
 
       /* --- UI ELEMENTS --- */
@@ -82,7 +131,7 @@
 
       /* Mobile Controls */
       .mobile-controls { display: none; position: absolute; z-index: 50; pointer-events: auto; }
-      @media (max-width: 768px) { .mobile-controls { display: block; } .controls-hint { display: none; } #custom-cursor { opacity: 0 !important; } }
+      @media (max-width: 768px) { .mobile-controls { display: block; } .controls-hint { display: none; } #custom-cursor }
       .d-pad { bottom: 20px; left: 20px; width: 150px; height: 150px; position: absolute; }
       .d-btn { position: absolute; width: 50px; height: 50px; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; display: flex; justify-content: center; align-items: center; font-size: 1.5rem; color: rgba(255, 255, 255, 0.5); touch-action: manipulation; }
       .d-btn:active { background: rgba(255, 255, 255, 0.3); }
@@ -129,7 +178,13 @@
       @keyframes warpZoom { 0% { transform: translate(-50%, -50%) scale(0.1); opacity: 0; } 10% { opacity: 1; } 90% { opacity: 0.8; } 100% { transform: translate(-50%, -50%) scale(50); opacity: 0; } }
       @keyframes warpStreak { 0% { width: 2px; height: 2px; opacity: 0; left: 50%; top: 50%; } 20% { opacity: 1; } 100% { opacity: 0; } }
       @keyframes tunnel { 0% { transform: scale(0.5) rotate(0deg); opacity: 0; } 50% { opacity: 0.3; } 100% { transform: scale(3) rotate(180deg); opacity: 0; } }
-    </style>
+    
+/* --- Cursor fix: hide system cursor, ensure custom cursor visible --- */
+html, body, * {
+  cursor: none !important;
+}
+
+</style>
   </head>
   <body onclick="initAudio()">
     <div class="vignette"></div>
@@ -189,7 +244,7 @@
             <div style="margin-bottom: 2rem;">
                 <h1 class="text-7xl tracking-widest font-bold hologram">THE LAST LIGHT</h1>
                 <div style="text-align: center; height: 1.5rem;">
-                    <p class="text-xs text-cyan-400 tracking-[0.5em] mt-2 type">SYSTEM.INIT(v3.3.1)</p>
+                    <p class="text-xs text-cyan-400 tracking-[0.5em] mt-2 type">SYSTEM.INIT(v3.3.6)</p>
                 </div>
             </div>
             <div class="flex flex-col items-center mt-4">
@@ -290,8 +345,8 @@
     <input type="text" id="player-name" placeholder="YOUR NAME" maxlength="24" />
     <div style="display:flex; gap:12px; flex-direction:column; align-items:center;">
       <button class="btn" onclick="submitGameScore()">Commit to Memory</button>
-    </div> <!-- <-- close the inner div -->
-  </div> <!-- <-- close name-entry-container -->
+    </div> <!-- close the inner div -->
+  </div> <!-- close name-entry-container -->
 
   <!-- Post-submit actions (hidden until submitGameScore runs) -->
   <div id="death-actions" style="display: none; gap:12px; flex-direction:column; align-items:center;">
@@ -324,32 +379,28 @@
       /* --- INIT & TYPEWRITER --- */
       window.onload = () => { document.querySelector('.type').classList.add('typewriter'); };
 
-      /* --- CURSOR FIX --- */
-      const cursor = document.getElementById('custom-cursor');
-      let cursorInitialized = false;
-      window.addEventListener('mousemove', (e) => {
-        cursor.style.left = e.clientX + 'px'; cursor.style.top = e.clientY + 'px';
-        if (!cursorInitialized) { cursorInitialized = true; updateCursorVisibility(); }
-      });
-      function updateCursorVisibility() {
-        if (!cursorInitialized) return;
-        
-        // Screens that constitute a "menu"
-        const screens = ['intro-screen','start-screen-modern','start-screen-classic','pause-screen','shop-screen','leaderboard-screen','death-screen','settings-screen','reset-options-screen'];
-        
-        // If ANY menu is currently visible (display is flex), show the cursor
-        const isMenuOpen = screens.some(s => {
-            const el = document.getElementById(s);
-            return el && window.getComputedStyle(el).display === 'flex';
-        });
+    const cursor = document.getElementById('custom-cursor');
 
-        // Hide cursor if we are playing the game AND no menu is open
-        if (isPlaying && !isPaused && !isMenuOpen) {
-            cursor.style.opacity = '0';
-        } else {
-            cursor.style.opacity = '1';
-        }
+    // Track cursor immediately
+    document.addEventListener('mousemove', (e) => {
+      if (cursor) {
+        cursor.style.left = e.clientX + 'px';
+        cursor.style.top = e.clientY + 'px';
       }
+    });
+
+    function updateCursorVisibility() {
+      const cursor = document.getElementById('custom-cursor');
+      if (!cursor) return;
+  
+      // Hide cursor during active gameplay, show it everywhere else
+      if (isPlaying && !isPaused) {
+        cursor.style.opacity = '0';
+      } else {
+        cursor.style.opacity = '1';
+      }
+    }
+
 
       /* --- SETTINGS & KEYBINDS --- */
       const defaultBinds = { up: 'w', down: 's', left: 'a', right: 'd', blast: ' ', pause: 'p' };
@@ -358,6 +409,29 @@
         binds: defaultBinds
       };
       let remappingAction = null;
+
+      function saveSettings() {
+        localStorage.setItem("gameSettings", JSON.stringify(settings));
+      }
+
+      function loadSettings() {
+        const saved = localStorage.getItem("gameSettings");
+        if (!saved) return;
+
+        try {
+          const parsed = JSON.parse(saved);
+          Object.assign(settings, parsed);
+        } catch (e) {
+          console.warn("Failed to load settings:", e);
+        }
+      }
+
+      function applySettings() {
+        if (masterGain && settings.vol !== undefined) {
+          masterGain.gain.setTargetAtTime(settings.vol, audioCtx.currentTime, 0.1);
+        }
+      }
+
 
       function openSettings() {
         document.getElementById('start-screen-modern').style.display = 'none';
@@ -592,6 +666,10 @@
         const beginBtn = document.getElementById('begin-btn');
         const warpEffect = document.getElementById('warp-effect');
         
+        loadSettings();
+        applySettings();
+
+        
         // Start audio
         initAudio();
         // Hide button
@@ -751,7 +829,19 @@
       }
       function resetGameVariables() { health = 100 + saveData.upgrades.health * 20; score = 0; rescued = 0; level = 1; shakeAmount = 0; memories = []; shadows = []; whisperers = []; echoes = []; particles = []; blasts = []; bouncers = []; lurkers = []; pillars = []; glitchers = []; player.x = width / 2; player.y = height / 2; }
       function resetGame() { 
+      // Stop the game
+        isPlaying = false;
+        isPaused = false;
+  
+        // Hide all screens
         deathScreen.style.display = 'none';
+        pauseScreen.style.display = 'none';
+        shopScreen.style.display = 'none';
+        leaderboardScreen.style.display = 'none';
+        document.getElementById('settings-screen').style.display = 'none';
+        document.getElementById('reset-options-screen').style.display = 'none';
+  
+        // Show start screen
         showStartScreen();
         updateCursorVisibility();
       }
@@ -822,17 +912,17 @@ function restartAfterDeath() {
           pillars.forEach(p => { p.update(); if (!p.growing && Math.hypot(p.x - player.x, p.y - player.y) < p.radius) health -= 0.8; });
           glitchers.forEach(g => { g.update(); if (Math.hypot(g.x - player.x, g.y - player.y) < 20) health -= 25; });
           pillars = pillars.filter(p => p.life > 0);
-          if (Math.random() < 0.005 && bouncers.length < 3) bouncers.push(new Bouncer());
-          if (Math.random() < 0.005 && lurkers.length < 3) lurkers.push(new Lurker());
-          if (Math.random() < 0.005 && pillars.length < 2) pillars.push(new Pillar());
-          if (Math.random() < 0.005 && glitchers.length < 3) glitchers.push(new Glitcher());
+          if (Math.random() < 0.005 * 60 * deltaTime && bouncers.length < 3) bouncers.push(new Bouncer());
+          if (Math.random() < 0.005 * 60 * deltaTime && lurkers.length < 3) lurkers.push(new Lurker());
+          if (Math.random() < 0.005 * 60 * deltaTime && pillars.length < 2) pillars.push(new Pillar());
+          if (Math.random() < 0.005 * 60 * deltaTime && glitchers.length < 3) glitchers.push(new Glitcher());
         }
 
         if (health <= 0) { endGame("Consumed by the Dark"); return; }
         blasts.forEach(b => b.update()); blasts = blasts.filter(b => b.life > 0);
-        if (Math.random() < 0.018) memories.push({ x: Math.random() * (width - 150) + 75, y: Math.random() * (height - 150) + 75, pulse: Math.random() * Math.PI });
-        if (Math.random() < Math.min(0.1, 0.01 + level * 0.005)) shadows.push(new Shadow());
-        if (score > 5 && whisperers.length < Math.min(6, 1 + Math.floor(level / 3)) && Math.random() < 0.01) whisperers.push(new Whisperer());
+        if (Math.random() < 0.018 * 60 * deltaTime) memories.push({ x: Math.random() * (width - 150) + 75, y: Math.random() * (height - 150) + 75, pulse: Math.random() * Math.PI });
+        if (Math.random() < Math.min(0.1, 0.01 + level * 0.005) * 60 * deltaTime) shadows.push(new Shadow());
+        if (score > 5 && whisperers.length < Math.min(6, 1 + Math.floor(level / 3)) && Math.random() < 0.01 * 60 * deltaTime) whisperers.push(new Whisperer());
         if (Math.random() < 0.004) echoes.push(new Echo(phrases[Math.floor(Math.random() * phrases.length)]));
         particles = particles.filter(p => { p.update(); return p.life > 0; });
         echoes = echoes.filter(e => { e.update(); return e.life > 0; });
@@ -860,11 +950,42 @@ function restartAfterDeath() {
         if (lastTime === 0) lastTime = currentTime;
         deltaTime = Math.min((currentTime - lastTime) / 1000, 0.1); // Cap at 0.1s to prevent huge jumps
         lastTime = currentTime;
-        if (!isPaused) { update(); draw(); }
+        if (!isPaused) { 
+          update(); 
+          draw(); 
+        }
+        updateCursorVisibility(); // Update cursor visibility each frame
         requestAnimationFrame(gameLoop);
       }
       updateSettings(); updateCursorVisibility(); updateAudioIcon();
-    </script>
+    
+// --- Save-on-change helper (added) ---
+function saveOnChange(mutator) {
+  mutator();
+  localStorage.setItem("lastLightSettings_v2", JSON.stringify(settings));
+}
+
+
+// --- Auto-save ALL settings on change/input (added) ---
+document.addEventListener('change', (e) => {
+  if (e.target.closest && e.target.closest('#settings-screen')) {
+    if (typeof updateSettings === 'function') updateSettings();
+  }
+});
+
+document.addEventListener('input', (e) => {
+  if (e.target.closest && e.target.closest('#settings-screen')) {
+    if (typeof updateSettings === 'function') updateSettings();
+  }
+});
+
+
+// --- Ensure custom cursor is visible on first mouse move ---
+document.addEventListener('mousemove', () => {
+  const c = document.getElementById('custom-cursor');
+  if (c) c.style.opacity = '1';
+}, { once: true });
+
+</script>
   </body>
 </html>
-
