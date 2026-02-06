@@ -4,54 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>The Last Light</title>
-    <script src="https://cdn.tailwindcss.com">
-// --- Save-on-change helper (added) ---
-function saveOnChange(mutator) {
-  mutator();
-  localStorage.setItem("lastLightSettings_v2", JSON.stringify(settings));
-}
-
-
-// --- Auto-save ALL settings on change/input (added) ---
-document.addEventListener('change', (e) => {
-  if (e.target.closest && e.target.closest('#settings-screen')) {
-    if (typeof updateSettings === 'function') updateSettings();
-  }
-});
-
-document.addEventListener('input', (e) => {
-  if (e.target.closest && e.target.closest('#settings-screen')) {
-    if (typeof updateSettings === 'function') updateSettings();
-  }
-});
-
-
-// --- Ensure custom cursor is visible on first mouse move ---
-document.addEventListener('mousemove', () => {
-  const c = document.getElementById('custom-cursor');
-  if (c) c.style.opacity = '1';
-}, { once: true });
-
-/* ==== CUSTOM CURSOR (FORCED VISIBLE) ==== */
-html, body, * {
-  cursor: none !important;
-}
-
-#custom-cursor {
-  position: fixed;
-  left: 0;
-  top: 0;
-  width: 14px;
-  height: 14px;
-  border: 2px solid #7df9ff;
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 999999;
-  transform: translate(-50%, -50%);
-}
-
-
-</script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
       /* --- CORE STYLES --- */
       body {
@@ -160,6 +113,7 @@ html, body, * {
       .page-btn:disabled { opacity: 0.3; border-color: #333; color: #444; cursor: none; }
       .page-info { color: #888; font-size: 0.9rem; min-width: 120px; text-align: center; }
       #audio-toggle { position: absolute; top: 20px; right: 20px; cursor: none; z-index: 200; opacity: 0.5; transition: opacity 0.3s; pointer-events: auto; }
+      #game-timer { position: absolute; top: 20px; right: 60px; font-size: 1.2rem; color: #888; z-index: 200; pointer-events: none; font-family: "Courier New", Courier, monospace; text-shadow: 0 0 5px black; }
       .controls-hint { position: absolute; bottom: 20px; right: 20px; text-align: right; font-size: 0.7rem; color: #444; pointer-events: none; z-index: 50; }
       .level-notif { position: absolute; top: 15%; width: 100%; text-align: center; color: white; font-size: 2rem; letter-spacing: 8px; opacity: 0; transition: opacity 1s; pointer-events: none; text-shadow: 0 0 10px white; }
       input#player-name { background: transparent; border: none; border-bottom: 1px solid #444; color: white; text-align: center; padding: 10px; font-family: inherit; font-size: 1.2rem; outline: none; margin-bottom: 15px; width: 320px; cursor: none; pointer-events: auto; }
@@ -211,6 +165,8 @@ html, body, * {
 
       <div id="level-popup" class="level-notif">DEPTH INCREASED</div>
 
+      <div id="game-timer" style="display: none;">00:00</div>
+
       <div id="audio-toggle" onclick="toggleAudio()">
         <svg id="audio-icon-on" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
@@ -244,7 +200,7 @@ html, body, * {
             <div style="margin-bottom: 2rem;">
                 <h1 class="text-7xl tracking-widest font-bold hologram">THE LAST LIGHT</h1>
                 <div style="text-align: center; height: 1.5rem;">
-                    <p class="text-xs text-cyan-400 tracking-[0.5em] mt-2 type">SYSTEM.INIT(v3.3.6)</p>
+                    <p class="text-xs text-cyan-400 tracking-[0.5em] mt-2 type">SYSTEM.INIT(v3.3.8)</p>
                 </div>
             </div>
             <div class="flex flex-col items-center mt-4">
@@ -274,7 +230,7 @@ html, body, * {
             <div class="setting-header">General</div>
             <div class="setting-row"><span class="setting-label">Home Screen</span><select id="set-home" onchange="updateSettings()"><option value="modern">Modern</option><option value="classic">Classic</option></select></div>
             <div class="setting-row"><span class="setting-label">Input Mode</span><select id="set-input" onchange="updateSettings()"><option value="kb">Keyboard/Mouse</option><option value="mobile">Mobile Touch</option></select></div>
-            <div class="setting-row"><span class="setting-label">Master Volume</span><input id="set-vol" type="range" min="0" max="1" step="0.1" value="0.3" onchange="updateSettings()"></div>
+            <div class="setting-row"><span class="setting-label">Master Volume</span><input id="set-vol" type="range" min="0" max="1" step="0.1" value="0.3" oninput="updateVolumeImmediate(this.value)" onchange="updateSettings()"></div>
             <div class="setting-row"><span class="setting-label">Screen Shake</span><select id="set-shake" onchange="updateSettings()"><option value="on">Enabled</option><option value="off">Disabled</option></select></div>
             <div class="setting-row"><span class="setting-label">Particles</span><select id="set-particles" onchange="updateSettings()"><option value="high">Lush</option><option value="low">Minimal</option></select></div>
             <div class="setting-row"><span class="setting-label">Echo Echoes</span><select id="set-echoes" onchange="updateSettings()"><option value="on">Visible</option><option value="off">Hidden</option></select></div>
@@ -345,8 +301,8 @@ html, body, * {
     <input type="text" id="player-name" placeholder="YOUR NAME" maxlength="24" />
     <div style="display:flex; gap:12px; flex-direction:column; align-items:center;">
       <button class="btn" onclick="submitGameScore()">Commit to Memory</button>
-    </div> <!-- close the inner div -->
-  </div> <!-- close name-entry-container -->
+    </div>
+  </div>
 
   <!-- Post-submit actions (hidden until submitGameScore runs) -->
   <div id="death-actions" style="display: none; gap:12px; flex-direction:column; align-items:center;">
@@ -503,6 +459,19 @@ html, body, * {
         updateKbHint();
       }
 
+      // Immediate volume update for slider responsiveness - AUDIO FIX
+      function updateVolumeImmediate(value) {
+        const vol = parseFloat(value);
+        settings.vol = vol;
+        if (masterGain && audioCtx) {
+          masterGain.gain.setTargetAtTime(vol, audioCtx.currentTime, 0.01);
+        }
+        const bgMusic = document.getElementById("bg-music");
+        if (bgMusic) {
+          bgMusic.volume = vol * 0.4;
+        }
+      }
+
       function updateKbHint() {
         const b = settings.binds;
         const up = b.up.toUpperCase(); const left = b.left.toUpperCase(); const down = b.down.toUpperCase(); const right = b.right.toUpperCase();
@@ -574,8 +543,8 @@ html, body, * {
       }
 
       /* --- SERVER FUNCTIONS --- */ 
-      const SERVER_URL = 'https://d733f197d250.ngrok-free.app';
-      const GAME_VERSION = 'v1.0'; // Change this when you want a new leaderboard
+      const SERVER_URL = 'https://overexcitably-rarest-marleen.ngrok-free.dev';
+      const GAME_VERSION = 'v1.0';
       
       async function submitScore(playerName, scoreValue) {
         try { 
@@ -755,6 +724,8 @@ html, body, * {
       let memories = [], shadows = [], whisperers = [], echoes = [], particles = [], blasts = [];
       let bouncers = [], lurkers = [], pillars = [], glitchers = [];
       let health = 100, score = 0, rescued = 0, level = 1, shakeAmount = 0;
+      let gameStartTime = 0;
+      let survivalTime = 0;
       const phrases = ["Nowhere to hide.", "Run.", "They hunger.", "Don't look back.", "It follows.", "The void stares.", "Shadows dance.", "Light fades.", "Memory leaks.", "Not alone."];
       const keys = {};
 
@@ -823,59 +794,66 @@ html, body, * {
         document.getElementById('start-screen-classic').style.display = 'none';
         resetGameVariables(); 
         isPlaying = true; 
-        isPaused = false; 
+        isPaused = false;
+        gameStartTime = Date.now();
+        document.getElementById('game-timer').style.display = 'block';
         updateCursorVisibility(); 
         requestAnimationFrame(gameLoop);
       }
-      function resetGameVariables() { health = 100 + saveData.upgrades.health * 20; score = 0; rescued = 0; level = 1; shakeAmount = 0; memories = []; shadows = []; whisperers = []; echoes = []; particles = []; blasts = []; bouncers = []; lurkers = []; pillars = []; glitchers = []; player.x = width / 2; player.y = height / 2; }
+      function resetGameVariables() { health = 100 + saveData.upgrades.health * 20; score = 0; rescued = 0; level = 1; shakeAmount = 0; memories = []; shadows = []; whisperers = []; echoes = []; particles = []; blasts = []; bouncers = []; lurkers = []; pillars = []; glitchers = []; player.x = width / 2; player.y = height / 2; gameStartTime = 0; survivalTime = 0; }
       function resetGame() { 
-      // Stop the game
         isPlaying = false;
         isPaused = false;
   
-        // Hide all screens
         deathScreen.style.display = 'none';
         pauseScreen.style.display = 'none';
         shopScreen.style.display = 'none';
         leaderboardScreen.style.display = 'none';
         document.getElementById('settings-screen').style.display = 'none';
         document.getElementById('reset-options-screen').style.display = 'none';
+        document.getElementById('game-timer').style.display = 'none';
   
-        // Show start screen
         showStartScreen();
         updateCursorVisibility();
       }
-      function endGame(reason) { isPlaying = false; document.getElementById("final-stats").innerText = `Level ${level} | Memories: ${score} | Rescued: ${rescued}`; deathScreen.style.display = "flex"; document.getElementById("cause-of-death").innerText = reason; document.getElementById("name-entry-container").style.display = "flex"; document.getElementById("death-actions").style.display = "none"; save(); updateCursorVisibility(); }
+      function endGame(reason) { 
+        isPlaying = false; 
+        survivalTime = Math.floor((Date.now() - gameStartTime) / 1000);
+        document.getElementById("final-stats").innerText = `Level ${level} | Memories: ${score} | Rescued: ${rescued} | Time: ${formatTime(survivalTime)}`; 
+        deathScreen.style.display = "flex"; 
+        document.getElementById("cause-of-death").innerText = reason; 
+        document.getElementById("name-entry-container").style.display = "flex"; 
+        document.getElementById("death-actions").style.display = "none"; 
+        document.getElementById('game-timer').style.display = 'none';
+        save(); 
+        updateCursorVisibility(); 
+      }
       function submitGameScore() { const name = document.getElementById("player-name").value.trim() || "Wanderer"; submitScore(name, score); document.getElementById("name-entry-container").style.display = "none"; document.getElementById("death-actions").style.display = "block"; }
 
-function restartAfterDeath() {
-  // Hide death screen
-  const deathScreen = document.getElementById("death-screen");
-  if (deathScreen) deathScreen.style.display = "none";
+      function restartAfterDeath() {
+        const deathScreen = document.getElementById("death-screen");
+        if (deathScreen) deathScreen.style.display = "none";
 
-  // Reset important timing so animation frame loop starts fresh
-  lastTime = 0;
+        lastTime = 0;
 
-  // Reset game variables (uses your existing reset logic to honor upgrades/save)
-  resetGameVariables();
+        resetGameVariables();
 
-  // Ensure flags
-  isPlaying = true;
-  isPaused = false;
+        isPlaying = true;
+        isPaused = false;
+        gameStartTime = Date.now();
 
-  // Hide any other UI overlays that might still be open
-  document.getElementById('start-screen-modern').style.display = 'none';
-  document.getElementById('start-screen-classic').style.display = 'none';
-  document.getElementById('pause-screen').style.display = 'none';
-  document.getElementById('shop-screen').style.display = 'none';
-  document.getElementById('leaderboard-screen').style.display = 'none';
-  document.getElementById('settings-screen').style.display = 'none';
-  document.getElementById('reset-options-screen').style.display = 'none';
+        document.getElementById('start-screen-modern').style.display = 'none';
+        document.getElementById('start-screen-classic').style.display = 'none';
+        document.getElementById('pause-screen').style.display = 'none';
+        document.getElementById('shop-screen').style.display = 'none';
+        document.getElementById('leaderboard-screen').style.display = 'none';
+        document.getElementById('settings-screen').style.display = 'none';
+        document.getElementById('reset-options-screen').style.display = 'none';
+        document.getElementById('game-timer').style.display = 'block';
 
-  updateCursorVisibility();
-  // Kick off the game loop again
-  requestAnimationFrame(gameLoop);
-}
+        updateCursorVisibility();
+        requestAnimationFrame(gameLoop);
+      }
 
       function triggerBlast() { 
         if (health < 15) return; health -= 15; 
@@ -889,6 +867,13 @@ function restartAfterDeath() {
 
       function update() {
         if (!isPlaying || isPaused) return;
+        
+        // Update timer display
+        if (gameStartTime > 0) {
+          const elapsed = Math.floor((Date.now() - gameStartTime) / 1000);
+          document.getElementById('game-timer').innerText = formatTime(elapsed);
+        }
+        
         if (shakeAmount > 0) shakeAmount *= Math.pow(0.9, 60 * deltaTime);
         let dx = 0, dy = 0;
         if (keys.up) dy -= 1; if (keys.down) dy += 1; if (keys.left) dx -= 1; if (keys.right) dx += 1;
@@ -946,46 +931,24 @@ function restartAfterDeath() {
 
       function gameLoop(currentTime) {
         if (!isPlaying) return;
-        // Calculate delta time in seconds
         if (lastTime === 0) lastTime = currentTime;
-        deltaTime = Math.min((currentTime - lastTime) / 1000, 0.1); // Cap at 0.1s to prevent huge jumps
+        deltaTime = Math.min((currentTime - lastTime) / 1000, 0.1);
         lastTime = currentTime;
         if (!isPaused) { 
           update(); 
           draw(); 
         }
-        updateCursorVisibility(); // Update cursor visibility each frame
+        updateCursorVisibility();
         requestAnimationFrame(gameLoop);
       }
+      
+      function formatTime(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+      }
+      
       updateSettings(); updateCursorVisibility(); updateAudioIcon();
-    
-// --- Save-on-change helper (added) ---
-function saveOnChange(mutator) {
-  mutator();
-  localStorage.setItem("lastLightSettings_v2", JSON.stringify(settings));
-}
-
-
-// --- Auto-save ALL settings on change/input (added) ---
-document.addEventListener('change', (e) => {
-  if (e.target.closest && e.target.closest('#settings-screen')) {
-    if (typeof updateSettings === 'function') updateSettings();
-  }
-});
-
-document.addEventListener('input', (e) => {
-  if (e.target.closest && e.target.closest('#settings-screen')) {
-    if (typeof updateSettings === 'function') updateSettings();
-  }
-});
-
-
-// --- Ensure custom cursor is visible on first mouse move ---
-document.addEventListener('mousemove', () => {
-  const c = document.getElementById('custom-cursor');
-  if (c) c.style.opacity = '1';
-}, { once: true });
-
-</script>
+    </script>
   </body>
 </html>
